@@ -1,108 +1,101 @@
 package com.hidarisoft.springbatchstudy.config;
 
-import com.hidarisoft.springbatchstudy.quartz.BatchJobQuartzJobBean;
-import org.quartz.*;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.launch.JobLauncher;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
+import com.hidarisoft.springbatchstudy.quartz.FirstQuartzJobBean;
+import com.hidarisoft.springbatchstudy.quartz.SecondQuartzJobBean;
+import com.hidarisoft.springbatchstudy.quartz.ThirdQuartzJobBean;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.quartz.Job;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SimpleScheduleBuilder;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.quartz.SchedulerFactoryBean;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 @Configuration
+@Slf4j
+@RequiredArgsConstructor
 public class QuartzConfig {
-
-    private final ApplicationContext applicationContext;
-    private final JobLauncher jobLauncher;
-    private final Job job1;
-    private final Job job2;
-    private final Job job3;
-
-    public QuartzConfig(
-            ApplicationContext applicationContext,
-            JobLauncher jobLauncher,
-            @Qualifier("job1") Job job1,
-            @Qualifier("job2") Job job2,
-            @Qualifier("job3") Job job3) {
-        this.applicationContext = applicationContext;
-        this.jobLauncher = jobLauncher;
-        this.job1 = job1;
-        this.job2 = job2;
-        this.job3 = job3;
+    public record Tuple<A, B>(A first, B second) {
     }
 
-    @Bean
-    public JobDetail job1Detail() {
-        return JobBuilder.newJob(BatchJobQuartzJobBean.class)
-                .withIdentity("job1Detail")
-                .storeDurably()
-                .usingJobData("jobName", job1.getName())
+    private final Scheduler scheduler;
+
+    @PostConstruct
+    public void init() throws SchedulerException {
+        var first = firstJobExecuted();
+        var second = secondJobExecuted();
+        var third = thirdJobExecuted();
+
+        Map<JobDetail, Set<? extends Trigger>> map = new HashMap<>();
+        map.put(first.first, Set.of(first.second));
+        map.put(second.first, Set.of(second.second));
+        map.put(third.first, Set.of(third.second));
+        scheduler.scheduleJobs(map, false);
+    }
+
+    private Tuple<JobDetail, Trigger> firstJobExecuted() {
+        log.info("First init");
+
+        JobDetail firstJobDetail = JobBuilder.newJob(FirstQuartzJobBean.class)
+                .withIdentity("firstJobDetail", "settleBatch")
                 .build();
-    }
 
-    @Bean
-    public JobDetail job2Detail() {
-        return JobBuilder.newJob(BatchJobQuartzJobBean.class)
-                .withIdentity("job2Detail")
-                .storeDurably()
-                .usingJobData("jobName", job2.getName())
+        Trigger firstTrigger = TriggerBuilder
+                .newTrigger()
+                .forJob(firstJobDetail)
+                .withIdentity("settleDaysTrigger", "settleBatch")
+                .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+                        .withIntervalInMinutes(1)
+                        .repeatForever())
                 .build();
+
+        return new Tuple<>(firstJobDetail, firstTrigger);
     }
 
-    @Bean
-    public JobDetail job3Detail() {
-        return JobBuilder.newJob(BatchJobQuartzJobBean.class)
-                .withIdentity("job3Detail")
-                .storeDurably()
-                .usingJobData("jobName", job3.getName())
+    private Tuple<JobDetail, Trigger> secondJobExecuted() {
+        log.info("Second init");
+
+        JobDetail secondJobDetail = JobBuilder.newJob(SecondQuartzJobBean.class)
+                .withIdentity("secondJobDetail", "settleBatch")
                 .build();
-    }
 
-    @Bean
-    public Trigger job1Trigger() {
-        return TriggerBuilder.newTrigger()
-                .forJob(job1Detail())
-                .withIdentity("job1Trigger")
+        Trigger secondTrigger = TriggerBuilder
+                .newTrigger()
+                .forJob(secondJobDetail)
+                .withIdentity("settleDaysTrigger", "settleBatch")
                 .withSchedule(SimpleScheduleBuilder.simpleSchedule()
                         .withIntervalInMinutes(2)
                         .repeatForever())
                 .build();
+
+        return new Tuple<>(secondJobDetail, secondTrigger);
     }
 
-    @Bean
-    public Trigger job2Trigger() {
-        return TriggerBuilder.newTrigger()
-                .forJob(job2Detail())
-                .withIdentity("job2Trigger")
+    private Tuple<JobDetail, Trigger> thirdJobExecuted() {
+        log.info("Third init");
+
+        JobDetail thirdJobDetail = JobBuilder.newJob(ThirdQuartzJobBean.class)
+                .withIdentity("thirdJobDetail", "settleBatch")
+                .build();
+
+        Trigger thirdTrigger = TriggerBuilder
+                .newTrigger()
+                .forJob(thirdJobDetail)
+                .withIdentity("settleDaysTrigger", "settleBatch")
                 .withSchedule(SimpleScheduleBuilder.simpleSchedule()
-                        .withIntervalInMinutes(4)
+                        .withIntervalInMinutes(3)
                         .repeatForever())
                 .build();
-    }
 
-    @Bean
-    public Trigger job3Trigger() {
-        return TriggerBuilder.newTrigger()
-                .forJob(job3Detail())
-                .withIdentity("job3Trigger")
-                .withSchedule(SimpleScheduleBuilder.simpleSchedule()
-                        .withIntervalInMinutes(6)
-                        .repeatForever())
-                .build();
-    }
-
-    @Bean
-    public SchedulerFactoryBean schedulerFactoryBean() {
-        SchedulerFactoryBean schedulerFactoryBean = new SchedulerFactoryBean();
-
-        // Configurar o JobFactory para injetar dependências nos jobs
-        AutowiringSpringBeanJobFactory jobFactory = new AutowiringSpringBeanJobFactory();
-        jobFactory.setApplicationContext(applicationContext);
-        schedulerFactoryBean.setJobFactory(jobFactory);
-
-        schedulerFactoryBean.setTriggers(job1Trigger(), job2Trigger(), job3Trigger());
-        schedulerFactoryBean.setJobDetails(job1Detail(), job2Detail(), job3Detail());
-        return schedulerFactoryBean;
+        return new Tuple<>(thirdJobDetail, thirdTrigger);
     }
 }

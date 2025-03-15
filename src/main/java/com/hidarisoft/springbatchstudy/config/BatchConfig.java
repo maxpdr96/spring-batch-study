@@ -4,73 +4,79 @@ package com.hidarisoft.springbatchstudy.config;
 import com.hidarisoft.springbatchstudy.tasklet.FirstTasklet;
 import com.hidarisoft.springbatchstudy.tasklet.SecondTasklet;
 import com.hidarisoft.springbatchstudy.tasklet.ThirdTasklet;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Configuration
+@RequiredArgsConstructor
+@Slf4j
 public class BatchConfig {
+    private final JobRepository jobRepository;
 
-    @Autowired
-    private JobRepository jobRepository;
-
-    @Autowired
-    private PlatformTransactionManager transactionManager;
-
-    @Autowired
-    private FirstTasklet firstTasklet;
-
-    @Autowired
-    private SecondTasklet secondTasklet;
-
-    @Autowired
-    private ThirdTasklet thirdTasklet;
+    private final PlatformTransactionManager platformTransactionManager;
 
     @Bean
-    public Step step1() {
-        return new StepBuilder("step1", jobRepository)
-                .tasklet(firstTasklet, transactionManager)
+    public Job firstJob(Step simpleStep) {
+        return new JobBuilder("firstJob", jobRepository)
+                .incrementer(new RunIdIncrementer())
+                .start(simpleStep)
                 .build();
     }
 
     @Bean
-    public Step step2() {
-        return new StepBuilder("step2", jobRepository)
-                .tasklet(secondTasklet, transactionManager)
+    public Step simpleStep() {
+        return new StepBuilder("simpleStep", jobRepository)
+                .tasklet((a, b) -> {
+                    log.info("simpleStep start");
+                    return RepeatStatus.FINISHED;
+                }, platformTransactionManager)
                 .build();
     }
 
     @Bean
-    public Step step3() {
-        return new StepBuilder("step3", jobRepository)
-                .tasklet(thirdTasklet, transactionManager)
+    public Job secondJob(Step secondStep) {
+        return new JobBuilder("secondJob", jobRepository)
+                .incrementer(new RunIdIncrementer())
+                .start(secondStep)
                 .build();
     }
 
     @Bean
-    public Job job1() {
-        return new JobBuilder("job1", jobRepository)
-                .start(step1())
+    public Step secondStep() {
+        return new StepBuilder("secondStep", jobRepository)
+                .tasklet((a, b) -> {
+                    log.info("secondStep start");
+                    return RepeatStatus.FINISHED;
+                }, platformTransactionManager)
                 .build();
     }
 
     @Bean
-    public Job job2() {
-        return new JobBuilder("job2", jobRepository)
-                .start(step2())
+    public Job thirdJob(Step thirdStep) {
+        return new JobBuilder("thirdJob", jobRepository)
+                .incrementer(new RunIdIncrementer())
+                .start(thirdStep)
                 .build();
     }
 
     @Bean
-    public Job job3() {
-        return new JobBuilder("job3", jobRepository)
-                .start(step3())
+    public Step thirdStep() {
+        return new StepBuilder("thirdStep", jobRepository)
+                .tasklet((a, b) -> {
+                    log.info("thirdStep start");
+                    return RepeatStatus.FINISHED;
+                }, platformTransactionManager)
                 .build();
     }
 }
